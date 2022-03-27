@@ -11,14 +11,21 @@ datasource db {
 }
 
 model User {
-  id Int @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  Int         @id @default(autoincrement())
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
-  email String @unique
-  hash String
-  firstName String?
-  lastName String?
+  email               String      @unique
+  hash                String?
+
+  firstName           String?
+  lastName            String?
+
+  provider            String      @default("local")
+  googleAccessToken   String?
+  googleRefreshToken  String?
+
+  hashedRefreshToken  String?
 
   @@map("users")
 }

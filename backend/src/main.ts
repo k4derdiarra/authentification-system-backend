@@ -10,12 +10,10 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
-  // const config = app.get<ConfigService>(ConfigService);
-  // const port = config.get<number>('SERVER_PORT');
-  console.log(
-    "🚀 ~ file: main.ts ~ line 16 ~ bootstrap ~ 'hello world'",
-    'hello world',
-  );
-  await app.listen(8080);
+
+  const config = app.get<ConfigService>(ConfigService);
+  const serverPort = config.get<number>('SERVER_PORT');
+
+  await app.listen(serverPort);
 }
 bootstrap();

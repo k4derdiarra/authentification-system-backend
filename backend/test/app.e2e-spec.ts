@@ -2,12 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as pactum from 'pactum';
 import { HttpStatus, INestApplication, ValidationPipe } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
-import { AuthDto } from 'src/auth/dto';
+import { LocalSignupAuthDto, LocalSigninAuthDto } from '../src/auth/dto';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('App e2e', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let config: ConfigService;
+  let serverIp: string;
+  let serverPort: number;
 
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -15,13 +19,16 @@ describe('App e2e', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    config = app.get<ConfigService>(ConfigService);
+    serverIp = config.get<string>('SERVER_IP');
+    serverPort = config.get<number>('SERVER_PORT');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
     await app.init();
-    await app.listen(3339);
+    await app.listen(serverPort);
 
     prisma = app.get<PrismaService>(PrismaService);
     await prisma.cleanDb();
-    pactum.request.setBaseUrl('http://localhost:3339/');
+    pactum.request.setBaseUrl(`${serverIp}:${serverPort}/`);
   });
 
   afterAll(() => {
@@ -29,12 +36,14 @@ describe('App e2e', () => {
   });
 
   describe('Auth', () => {
-    const dto: AuthDto = {
-      email: 'kader@gmail.com',
-      password: 'super-strong-pwd',
-    };
-
     describe('Signup', () => {
+      const dto: LocalSignupAuthDto = {
+        email: 'kader@gmail.com',
+        password: 'super-strong-pwd',
+        firstName: 'Diarra',
+        lastName: 'Kader',
+      };
+
       describe('Signup Local', () => {
         it('Should throw error if email empty', () => {
           return pactum
@@ -70,11 +79,22 @@ describe('App e2e', () => {
       });
 
       describe('Signup Google', () => {
-        it.todo('Should signin with google');
+        it('Should signin with google', () => {
+          return pactum
+            .spec()
+            .get('auth/google')
+            .withFollowRedirects(true)
+            .expectStatus(HttpStatus.OK);
+        });
       });
     });
 
     describe('Signin', () => {
+      const dto: LocalSigninAuthDto = {
+        email: 'kader@gmail.com',
+        password: 'super-strong-pwd',
+      };
+
       describe('Signin Local', () => {
         it('Should throw error if email empty', () => {
           return pactum
@@ -119,7 +139,32 @@ describe('App e2e', () => {
             .get('users/me')
             .withHeaders({ Authorization: 'Bearer $S{userAccessToken}' })
             .expectStatus(HttpStatus.OK)
-            .inspect();
+            .expectJsonSchema({
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'number',
+                },
+                createdAt: {
+                  type: 'string',
+                },
+                updatedAt: {
+                  type: 'string',
+                },
+                email: {
+                  type: 'string',
+                },
+                firstName: {
+                  type: 'null',
+                },
+                lastName: {
+                  type: 'null',
+                },
+                provider: {
+                  type: 'string',
+                },
+              },
+            });
         });
       });
     });

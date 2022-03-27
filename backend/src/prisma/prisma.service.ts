@@ -17,4 +17,10 @@ export class PrismaService extends PrismaClient {
   cleanDb() {
     return this.user.deleteMany();
   }
+
+  deleteField<Type>(keys: string[], obj: Type): void {
+    keys.forEach((key) => {
+      if (obj[key] !== undefined) delete obj[key];
+    });
+  }
 }
