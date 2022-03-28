@@ -10,7 +10,6 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
-
   const config = app.get<ConfigService>(ConfigService);
   const serverPort = config.get<number>('SERVER_PORT');
 

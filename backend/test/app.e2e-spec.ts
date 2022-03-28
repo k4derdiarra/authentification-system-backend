@@ -74,7 +74,13 @@ describe('App e2e', () => {
             .post('auth/local/signup')
             .withBody(dto)
             .expectStatus(HttpStatus.CREATED)
-            .expectJsonSchema('access_token', { type: 'string' });
+            .expectJsonSchema({
+              type: 'object',
+              properties: {
+                access_token: { type: 'string' },
+                refresh_token: { type: 'string' },
+              },
+            });
         });
       });
 
@@ -124,8 +130,14 @@ describe('App e2e', () => {
             .spec()
             .post('auth/local/signin')
             .withBody(dto)
-            .expectStatus(HttpStatus.CREATED)
-            .expectJsonSchema('access_token', { type: 'string' })
+            .expectStatus(HttpStatus.OK)
+            .expectJsonSchema({
+              type: 'object',
+              properties: {
+                access_token: { type: 'string' },
+                refresh_token: { type: 'string' },
+              },
+            })
             .stores('userAccessToken', 'access_token');
         });
       });
@@ -155,10 +167,10 @@ describe('App e2e', () => {
                   type: 'string',
                 },
                 firstName: {
-                  type: 'null',
+                  type: 'string',
                 },
                 lastName: {
-                  type: 'null',
+                  type: 'string',
                 },
                 provider: {
                   type: 'string',

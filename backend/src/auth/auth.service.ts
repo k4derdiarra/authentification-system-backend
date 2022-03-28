@@ -6,7 +6,8 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { LocalSigninAuthDto } from './dto';
-import { JwtAccessAndRefreshTokenDto, JwtPayloadDto } from './dto';
+import { JwtPayloadDto } from './dto';
+import { Tokens } from './types';
 
 @Injectable()
 export class AuthService {
@@ -16,32 +17,31 @@ export class AuthService {
     private jwt: JwtService,
   ) {}
 
-  async signupLocal(dto: LocalSignupAuthDto): JwtAccessAndRefreshTokenDto {
+  async signupLocal(dto: LocalSignupAuthDto): Promise<Tokens> {
     try {
       // TODO: generate the password hash
-      const salt = await bcrypt.genSalt();
-      const hash = await bcrypt.hash(dto.password, salt);
+      const hash = await this.hashData(dto.password);
 
       // TODO: save user in the db
       const user = await this.prisma.user.create({
-        data: { email: dto.email, hash },
+        data: {
+          email: dto.email,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          hash,
+        },
       });
 
-      // TODO: generate access and refresh token
-      const accessToken = await this.getAccessToken({
+      // TODO: create access and refresh tokens
+      const tokens = await this.getTokens({
         sub: user.id,
         email: user.email,
       });
-      const refreshToken = await this.getAccessToken({
-        sub: user.id,
-        email: user.email,
-      });
-
-      // ! not recommended
-      this.prisma.deleteField(['hash'], user);
+      // TODO: update old refresh token
+      await this.updateRefreshTokenInDatabase(tokens.refresh_token, user.id);
 
       // TODO: return jwt token
-      return { accessToken, refreshToken };
+      return tokens;
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -65,34 +65,19 @@ export class AuthService {
     // TODO: if password incorrect throw error
     if (!pwdMatches) throw new ForbiddenException('Credentials incorrect');
 
-    // TODO: return jwt token
-    return this.getNewAccessAndRefreshToken({
+    // TODO: create access and refresh tokens
+    const tokens = await this.getTokens({
       sub: user.id,
       email: user.email,
     });
+    // TODO: update old refresh token
+    await this.updateRefreshTokenInDatabase(tokens.refresh_token, user.id);
+
+    // TODO: return jwt token
+    return tokens;
   }
 
-  async signToken(
-    userId: number,
-    email: string,
-  ): Promise<{ access_token: string }> {
-    const payload = {
-      sub: userId,
-      email,
-    };
-
-    const secret = this.config.get<string>('JWT_ACCESS_TOKEN_SECRET');
-    const token = await this.jwt.signAsync(payload, {
-      secret,
-      expiresIn: '15m',
-    });
-
-    return {
-      access_token: token,
-    };
-  }
-
-  async signinGoogle(dto: GoogleAuthDto): JwtAccessAndRefreshTokenDto {
+  async signinGoogle(dto: GoogleAuthDto): Promise<Tokens> {
     try {
       // TODO: get user from db
       let user = await this.prisma.user.findFirst({
@@ -111,11 +96,17 @@ export class AuthService {
           },
         });
       }
-      // TODO: return jwt token
-      return this.getNewAccessAndRefreshToken({
+
+      // TODO: create access and refresh tokens
+      const tokens = await this.getTokens({
         sub: user.id,
         email: user.email,
       });
+      // TODO: update old refresh token
+      await this.updateRefreshTokenInDatabase(tokens.refresh_token, user.id);
+
+      // TODO: return jwt token
+      return tokens;
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -124,6 +115,11 @@ export class AuthService {
       }
       throw error;
     }
+  }
+
+  async hashData(data: string) {
+    const salt = await bcrypt.genSalt();
+    return bcrypt.hash(data, salt);
   }
 
   // TODO: create access token
@@ -148,12 +144,12 @@ export class AuthService {
 
   // TODO: create access and refresh token
   async updateRefreshTokenInDatabase(
-    refreshToken: string,
+    refreshToken: string | null,
     userId: number,
   ): Promise<void> {
     // TODO: if not null hash refresh token
     const hashedRefreshToken = refreshToken
-      ? await bcrypt.hash(refreshToken, await bcrypt.genSalt())
+      ? await this.hashData(refreshToken)
       : null;
 
     // TODO: update refresh token in db
@@ -164,17 +160,59 @@ export class AuthService {
   }
 
   // TODO: return access and refresh token
-  async getNewAccessAndRefreshToken(
-    payload: JwtPayloadDto,
-  ): JwtAccessAndRefreshTokenDto {
-    // TODO: update old refresh token
-    const refreshToken = await this.getRefreshToken(payload);
-    await this.updateRefreshTokenInDatabase(refreshToken, payload.sub);
+  async getTokens(payload: JwtPayloadDto): Promise<Tokens> {
+    // TODO: create tokens
+    const [accessToken, refreshToken] = await Promise.all([
+      this.getAccessToken(payload),
+      this.getRefreshToken(payload),
+    ]);
 
+    // TODO: return tokens
     return {
-      accessToken: await this.getAccessToken(payload),
-      refreshToken,
+      access_token: accessToken,
+      refresh_token: refreshToken,
     };
   }
-  // TODO:
+
+  // TODO: delete refresh token from db
+  // TODO: if refresh token stolen, delete RF of victim
+
+  async logout(userId: number): Promise<boolean> {
+    // TODO: remove refresh token from DB
+    await this.prisma.user.updateMany({
+      where: {
+        id: userId,
+        hashedRefreshToken: {
+          not: null,
+        },
+      },
+      data: {
+        hashedRefreshToken: null,
+      },
+    });
+    return true;
+  }
+
+  async refreshTokens(userId: number, refreshToken: string): Promise<Tokens> {
+    // TODO: get user from db
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    // TODO: if user not exist throw error
+    if (!user || !user.hashedRefreshToken)
+      throw new ForbiddenException('Access Denied');
+    // TODO: check if refresh tokens match
+    const isRefreshTokensMatches = await bcrypt.compare(
+      refreshToken,
+      user.hashedRefreshToken,
+    );
+    // TODO: if tokens not match throw error
+    if (!isRefreshTokensMatches) throw new ForbiddenException('Access Denied');
+    // TODO: if tokens match generate new tokens
+    const tokens = await this.getTokens({ sub: user.id, email: user.email });
+    // TODO: update refresh token in db
+    await this.updateRefreshTokenInDatabase(tokens.refresh_token, user.id);
+    // TODO: return new token
+    return tokens;
+  }
 }

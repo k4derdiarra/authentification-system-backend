@@ -1,9 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import {
+  INestApplication,
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService extends PrismaClient {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor(config: ConfigService) {
     super({
       datasources: {
@@ -11,7 +19,17 @@ export class PrismaService extends PrismaClient {
           url: config.get<string>('DATABASE_URL'),
         },
       },
+      log:
+        config.get<string>('NODE_ENV') !== 'TESTING' ? ['info', 'query'] : null,
     });
+  }
+
+  async onModuleInit() {
+    await this.$connect();
+  }
+
+  async onModuleDestroy() {
+    await this.$disconnect();
   }
 
   cleanDb() {
