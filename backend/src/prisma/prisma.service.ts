@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
+import { config } from 'process';
 
 @Injectable()
 export class PrismaService
@@ -32,8 +33,10 @@ export class PrismaService
     await this.$disconnect();
   }
 
-  cleanDb() {
-    return this.user.deleteMany();
+  async cleanDatabase() {
+    if (process.env.NODE_ENV === 'PRODUCTION') return;
+    const models = Reflect.ownKeys(this).filter((key) => key[0] !== '_');
+    return Promise.all(models.map((modelKey) => this[modelKey].deleteMany()));
   }
 
   deleteField<Type>(keys: string[], obj: Type): void {

@@ -1,13 +1,12 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { LocalSignupAuthDto, GoogleAuthDto } from './dto';
-import * as bcrypt from 'bcrypt';
+import * as argon from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { LocalSigninAuthDto } from './dto';
-import { JwtPayloadDto } from './dto';
-import { Tokens } from './types';
+import { JwtPayload, Tokens } from './types';
 
 @Injectable()
 export class AuthService {
@@ -20,7 +19,7 @@ export class AuthService {
   async signupLocal(dto: LocalSignupAuthDto): Promise<Tokens> {
     try {
       // TODO: generate the password hash
-      const hash = await this.hashData(dto.password);
+      const hash = await argon.hash(dto.password);
 
       // TODO: save user in the db
       const user = await this.prisma.user.create({
@@ -61,7 +60,7 @@ export class AuthService {
     if (!user) throw new ForbiddenException('Credentials incorrect');
 
     // TODO: compare password to hash
-    const pwdMatches = await bcrypt.compare(dto.password, user.hash);
+    const pwdMatches = await argon.verify(user.hash, dto.password);
     // TODO: if password incorrect throw error
     if (!pwdMatches) throw new ForbiddenException('Credentials incorrect');
 
@@ -117,13 +116,8 @@ export class AuthService {
     }
   }
 
-  async hashData(data: string) {
-    const salt = await bcrypt.genSalt();
-    return bcrypt.hash(data, salt);
-  }
-
   // TODO: create access token
-  async getAccessToken(payload: JwtPayloadDto): Promise<string> {
+  async getAccessToken(payload: JwtPayload): Promise<string> {
     const accessToken = await this.jwt.signAsync(payload, {
       secret: this.config.get<string>('JWT_ACCESS_TOKEN_SECRET'),
       expiresIn: this.config.get<string>('JWT_ACCESS_TOKEN_EXPIRATION_TIME'),
@@ -133,7 +127,7 @@ export class AuthService {
   }
 
   // TODO: create refresh token and store it (hashed)
-  async getRefreshToken(payload: JwtPayloadDto): Promise<string> {
+  async getRefreshToken(payload: JwtPayload): Promise<string> {
     const refreshToken = await this.jwt.signAsync(payload, {
       secret: this.config.get<string>('JWT_REFRESH_TOKEN_SECRET'),
       expiresIn: this.config.get<string>('JWT_REFRESH_TOKEN_EXPIRATION_TIME'),
@@ -149,7 +143,7 @@ export class AuthService {
   ): Promise<void> {
     // TODO: if not null hash refresh token
     const hashedRefreshToken = refreshToken
-      ? await this.hashData(refreshToken)
+      ? await argon.hash(refreshToken)
       : null;
 
     // TODO: update refresh token in db
@@ -160,7 +154,7 @@ export class AuthService {
   }
 
   // TODO: return access and refresh token
-  async getTokens(payload: JwtPayloadDto): Promise<Tokens> {
+  async getTokens(payload: JwtPayload): Promise<Tokens> {
     // TODO: create tokens
     const [accessToken, refreshToken] = await Promise.all([
       this.getAccessToken(payload),
@@ -202,9 +196,9 @@ export class AuthService {
     if (!user || !user.hashedRefreshToken)
       throw new ForbiddenException('Access Denied');
     // TODO: check if refresh tokens match
-    const isRefreshTokensMatches = await bcrypt.compare(
-      refreshToken,
+    const isRefreshTokensMatches = await argon.verify(
       user.hashedRefreshToken,
+      refreshToken,
     );
     // TODO: if tokens not match throw error
     if (!isRefreshTokensMatches) throw new ForbiddenException('Access Denied');

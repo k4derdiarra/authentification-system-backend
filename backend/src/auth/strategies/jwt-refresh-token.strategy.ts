@@ -4,7 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
-import { JwtPayloadDto } from '../dto';
+import { JwtPayload } from '../types';
 
 @Injectable()
 export class JwtRefreshTokenStrategy extends PassportStrategy(
@@ -19,7 +19,7 @@ export class JwtRefreshTokenStrategy extends PassportStrategy(
     });
   }
 
-  validate(req: Request, payload: JwtPayloadDto) {
+  validate(req: Request, payload: JwtPayload) {
     const refreshToken = req.get('authorization').replace('Bearer', '').trim();
     return {
       ...payload,

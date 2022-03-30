@@ -27,7 +27,7 @@ describe('App e2e', () => {
     await app.listen(serverPort);
 
     prisma = app.get<PrismaService>(PrismaService);
-    await prisma.cleanDb();
+    await prisma.cleanDatabase();
     pactum.request.setBaseUrl(`${serverIp}:${serverPort}/`);
   });
 

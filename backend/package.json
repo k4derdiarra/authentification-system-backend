@@ -29,7 +29,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "pretest:e2e": "npm run db:test:restart",
-    "test:e2e": "dotenv -e .env.test -- jest --watch --config ./test/jest-e2e.json"
+    "pretest:int": "npm run db:test:restart",
+    "test:e2e": "dotenv -e .env.test -- jest -i --no-cache --watch --config jest-e2e.json",
+    "test:int": "dotenv -e .env.test -- jest -i --no-cache --watch --config jest-int.json"
   },
   "dependencies": {
     "@nestjs/common": "^8.0.0",
@@ -39,6 +41,7 @@
     "@nestjs/passport": "^8.2.1",
     "@nestjs/platform-express": "^8.0.0",
     "@prisma/client": "^3.11.1",
+    "argon2": "^0.28.5",
     "bcrypt": "^5.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.13.2",
